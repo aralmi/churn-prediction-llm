@@ -1,0 +1,38 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Backend local files
+backend/tests/test.db
+backend/app/ml/artifacts/*
+!backend/app/ml/artifacts/.gitkeep
+
+# Frontend
+node_modules/
+dist/
+coverage/
+
+# Logs
+*.log
+
+# Local documents
+*.docx
