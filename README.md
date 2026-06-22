@@ -1,90 +1,295 @@
-# Churn Prediction with ML + LLM Explanations
+# Прогнозирование оттока клиентов с ML и LLM-объяснениями
 
-Fullstack MVP for customer churn prediction. The application stores customer data, runs an ML risk prediction, and generates a short human-readable explanation through a local Ollama model.
+Полноценный учебный fullstack MVP, в котором объединены backend на FastAPI, frontend на React, база данных PostgreSQL, ML-модель для оценки риска оттока клиентов и локальная LLM через Ollama для генерации текстовых объяснений результата прогноза.
 
-## What the project does
+Проект показывает полный прикладной сценарий:
 
-- manages a customer base through a FastAPI backend and PostgreSQL;
-- predicts churn risk for a selected customer with a `scikit-learn` model;
-- stores prediction history in the database;
-- generates a Russian-language explanation for the latest prediction through Ollama;
-- provides a React frontend with customer list, prediction page, analytics, and customer details page.
+- данные о клиентах сохраняются в PostgreSQL;
+- backend отдает API для работы с клиентами, прогнозами и объяснениями;
+- ML-модель вычисляет вероятность оттока клиента;
+- результат сохраняется в базе как отдельный прогноз;
+- LLM строит краткое объяснение на русском языке, почему риск именно такой и что можно сделать для удержания клиента;
+- frontend позволяет удобно работать со всем этим через браузер.
 
-## Tech stack
+## Идея проекта
+
+Задача проекта состоит в том, чтобы по признакам клиента оценивать вероятность его ухода из компании.
+
+В системе для каждого клиента хранятся признаки, которые часто используются в задачах churn prediction:
+
+- стаж обслуживания клиента (`tenure`);
+- тип договора (`contract_type`);
+- ежемесячный платеж (`monthly_charges`);
+- общий накопленный платеж (`total_charges`);
+- тип интернет-услуги (`internet_service`);
+- наличие техподдержки (`tech_support`);
+- способ оплаты (`payment_method`).
+
+На основе этих признаков ML-модель вычисляет вероятность оттока. Затем результат можно не только увидеть в виде числа и уровня риска, но и получить понятное текстовое объяснение через локальную LLM.
+
+## Что реализовано в проекте
+
+### Backend
+
+- FastAPI-приложение с REST API;
+- подключение к PostgreSQL через `DATABASE_URL`;
+- SQLAlchemy ORM для работы с таблицами;
+- Pydantic-схемы для валидации запросов и ответов;
+- CRUD для клиентов;
+- endpoints для запуска ML-прогноза;
+- endpoints для генерации и получения LLM-объяснений;
+- Swagger-документация по адресу `/docs`;
+- CORS для подключения frontend;
+- unit-тесты на `pytest`.
+
+### Frontend
+
+- React + TypeScript + Vite;
+- несколько страниц с единым стилем интерфейса;
+- таблица клиентов;
+- форма добавления клиента;
+- форма запуска прогноза;
+- карточка клиента с историей прогнозов;
+- блок LLM-объяснения по последнему прогнозу;
+- страница аналитики;
+- переключатель светлой и темной темы.
+
+### ML-часть
+
+- обучение модели на датасете Telco Customer Churn;
+- подготовка признаков через `Pipeline`;
+- `OneHotEncoder` для категориальных признаков;
+- `StandardScaler` для числовых признаков;
+- классификатор `LogisticRegression`;
+- подбор гиперпараметров через `GridSearchCV`;
+- поиск лучшего порога классификации (`threshold`);
+- сохранение модели и метрик после обучения.
+
+### LLM-часть
+
+- интеграция с локальной Ollama;
+- генерация объяснения по результату ML-прогноза;
+- prompt на русском языке;
+- fallback-объяснение, если Ollama недоступна;
+- хранение объяснений в PostgreSQL.
+
+## Технологический стек
 
 - Backend: Python 3.12, FastAPI, SQLAlchemy, Pydantic
 - Database: PostgreSQL
 - ML: pandas, scikit-learn, joblib
-- LLM: Ollama (`llama3.2:3b`)
+- LLM: Ollama, модель `llama3.2:3b`
 - Frontend: React, TypeScript, Vite, React Router
 - Tests: pytest
 
-## Project structure
+## Структура проекта
 
 ```text
 backend/
   app/
-    database.py
-    main.py
-    models.py
-    schemas.py
+    database.py              # подключение к БД и SessionLocal
+    main.py                  # создание FastAPI-приложения и подключение роутеров
+    models.py                # SQLAlchemy-модели таблиц
+    schemas.py               # Pydantic-схемы
     routers/
+      customers.py           # CRUD клиентов
+      predictions.py         # API для прогнозов
+      explanations.py        # API для LLM-объяснений
     services/
+      ml_service.py          # загрузка модели и расчет прогноза
+      llm_service.py         # запрос к Ollama и fallback-объяснение
     ml/
+      train_model.py         # обучение ML-модели
+      data/                  # CSV-датасет
+      artifacts/             # локальные артефакты модели
     scripts/
-  tests/
+      seed_demo_data.py      # очистка БД и заполнение демо-клиентами
+  tests/                     # backend-тесты
   requirements.txt
   .env.example
 
 frontend/
   src/
-    components/
-    pages/
-    api.ts
-    config.ts
-    types.ts
-    utils.ts
+    components/              # переиспользуемые UI-компоненты
+    pages/                   # страницы приложения
+    api.ts                   # HTTP-запросы к backend
+    config.ts                # базовый URL API
+    types.ts                 # TypeScript-типы
+    utils.ts                 # форматирование и вспомогательные функции
+    styles.css               # общие стили интерфейса
   package.json
   .env.example
 ```
 
-## Main features
+## База данных
 
-### Backend
+В проекте используются 4 таблицы:
+
+### `customers`
+
+Основная таблица клиентов. В ней хранятся признаки, по которым модель делает прогноз.
+
+### `predictions`
+
+Таблица результатов ML-прогнозов. Для одного клиента может быть несколько прогнозов, поэтому хранится история.
+
+В записи прогноза сохраняются:
+
+- вероятность оттока;
+- бинарная метка результата;
+- уровень риска;
+- версия модели;
+- дата создания прогноза.
+
+### `llm_explanations`
+
+Таблица с LLM-объяснениями для прогнозов. Объяснение строится на основе конкретного prediction, поэтому связано именно с ним.
+
+### `csv_uploads`
+
+Резервная таблица для будущего расширения проекта под загрузку CSV-файлов. На текущем этапе она не используется активно в интерфейсе, но оставлена как часть расширяемой структуры MVP.
+
+## API проекта
+
+### Healthcheck
 
 - `GET /api/health`
-- Customer CRUD:
-  - `GET /api/customers`
-  - `POST /api/customers`
-  - `GET /api/customers/{customer_id}`
-  - `PUT /api/customers/{customer_id}`
-  - `DELETE /api/customers/{customer_id}`
-- Predictions:
-  - `POST /api/predictions/{customer_id}`
-  - `GET /api/customers/{customer_id}/predictions`
-- LLM explanations:
-  - `POST /api/explanations/{prediction_id}`
-  - `GET /api/predictions/{prediction_id}/explanations`
 
-### Frontend
+### Клиенты
 
-- Home page with project overview
-- Customers page with search and add-customer form
-- Customer details page with prediction history and one LLM explanation block
-- Prediction page with customer selection and prediction launch
-- Analytics page with summary statistics
-- Light/dark theme switch
+- `GET /api/customers`
+- `POST /api/customers`
+- `GET /api/customers/{customer_id}`
+- `PUT /api/customers/{customer_id}`
+- `DELETE /api/customers/{customer_id}`
 
-## Database tables
+### Прогнозы
 
-- `customers` — main customer records
-- `predictions` — ML prediction results for customers
-- `llm_explanations` — LLM-generated explanations for predictions
-- `csv_uploads` — reserved table for future CSV import workflow
+- `POST /api/predictions/{customer_id}`
+- `GET /api/customers/{customer_id}/predictions`
 
-## Local setup
+### LLM-объяснения
 
-### 1. Backend
+- `POST /api/explanations/{prediction_id}`
+- `GET /api/predictions/{prediction_id}/explanations`
+
+## Как работает ML-часть
+
+### 1. Источник данных
+
+Для обучения используется датасет:
+
+```text
+backend/app/ml/data/Telco-Customer-Churn.csv
+```
+
+Из него берутся только те признаки, которые совпадают с полями клиента в нашей системе:
+
+- `tenure`
+- `Contract`
+- `MonthlyCharges`
+- `TotalCharges`
+- `InternetService`
+- `TechSupport`
+- `PaymentMethod`
+- целевая переменная `Churn`
+
+### 2. Подготовка признаков
+
+Числовые признаки:
+
+- `tenure`
+- `monthly_charges`
+- `total_charges`
+
+Категориальные признаки:
+
+- `contract_type`
+- `internet_service`
+- `tech_support`
+- `payment_method`
+
+Для категориальных признаков используется `OneHotEncoder`, а для числовых `StandardScaler`.
+
+### 3. Модель
+
+В качестве базовой модели выбрана `LogisticRegression`, потому что она:
+
+- проста и понятна для учебного проекта;
+- хорошо подходит для бинарной классификации;
+- быстро обучается;
+- дает интерпретируемую вероятность принадлежности к классу оттока.
+
+### 4. Подбор параметров
+
+В проекте реализован `GridSearchCV`, который подбирает лучшие параметры логистической регрессии по `roc_auc`.
+
+После этого дополнительно подбирается лучший порог классификации. Это важно, потому что стандартный порог `0.5` не всегда дает лучший баланс между `precision` и `recall`.
+
+### 5. Что сохраняется после обучения
+
+После запуска скрипта обучения локально создаются:
+
+- `backend/app/ml/artifacts/churn_model.joblib`
+- `backend/app/ml/artifacts/metrics.json`
+
+В `metrics.json` сохраняются:
+
+- accuracy
+- precision
+- recall
+- f1
+- roc_auc
+- best_threshold
+- best_params
+
+## Как работает LLM-часть
+
+LLM используется не для предсказания, а для объяснения уже готового результата ML-модели.
+
+Сценарий такой:
+
+1. backend получает конкретный `prediction_id`;
+2. находит прогноз и связанного с ним клиента;
+3. берет признаки клиента и результат модели;
+4. формирует prompt на русском языке;
+5. отправляет запрос в локальную Ollama;
+6. получает текст объяснения;
+7. сохраняет его в таблицу `llm_explanations`.
+
+В prompt явно зафиксировано, что модель должна:
+
+- отвечать строго на русском языке;
+- не выдумывать факты;
+- использовать только переданные данные;
+- кратко объяснять уровень риска;
+- давать 2 рекомендации по удержанию клиента.
+
+Если Ollama недоступна, backend не падает, а строит fallback-объяснение по шаблону.
+
+## Сценарий работы пользователя
+
+Типовой сценарий использования приложения:
+
+1. пользователь открывает страницу клиентов;
+2. добавляет нового клиента через форму;
+3. открывает карточку клиента;
+4. запускает ML-прогноз;
+5. получает вероятность оттока, уровень риска и статус;
+6. при необходимости генерирует LLM-объяснение;
+7. смотрит общую аналитику по базе клиентов и результатам прогнозов.
+
+## Локальный запуск проекта
+
+## 1. Подготовка PostgreSQL
+
+Нужно создать базу данных, например:
+
+```sql
+CREATE DATABASE churn_db;
+```
+
+## 2. Запуск backend
 
 ```bash
 cd backend
@@ -94,12 +299,26 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Set your own PostgreSQL credentials inside `backend/.env`.
+Далее нужно заполнить `backend/.env` своими локальными значениями.
 
-Run backend:
+Пример:
+
+```env
+DATABASE_URL=postgresql+psycopg://postgres:your_password@localhost:5432/churn_db
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2:3b
+```
+
+Запуск backend:
 
 ```bash
 uvicorn app.main:app --reload
+```
+
+Backend будет доступен по адресу:
+
+```text
+http://127.0.0.1:8000
 ```
 
 Swagger:
@@ -108,7 +327,7 @@ Swagger:
 http://127.0.0.1:8000/docs
 ```
 
-### 2. Frontend
+## 3. Запуск frontend
 
 ```bash
 cd frontend
@@ -117,63 +336,59 @@ cp .env.example .env
 npm run dev
 ```
 
-Frontend:
+Frontend будет доступен по адресу:
 
 ```text
 http://127.0.0.1:5173
 ```
 
-## ML workflow
+## 4. Обучение ML-модели
 
-Dataset location:
-
-```text
-backend/app/ml/data/Telco-Customer-Churn.csv
-```
-
-Train the model:
+Из папки `backend`:
 
 ```bash
-cd backend
 python -m app.ml.train_model
 ```
 
-The training script:
+## 5. Заполнение демо-данными
 
-- preprocesses numerical and categorical features;
-- uses `OneHotEncoder` and `StandardScaler`;
-- trains `LogisticRegression` inside a `Pipeline`;
-- performs hyperparameter search with `GridSearchCV`;
-- searches for the best classification threshold;
-- saves generated artifacts locally.
-
-## Demo data
-
-To reset demo data and load 20 sample customers:
+Если нужно очистить тестовые записи и снова заполнить БД нормальными демо-клиентами:
 
 ```bash
 cd backend
 python -m app.scripts.seed_demo_data
 ```
 
-## Ollama setup
+Скрипт:
 
-Install Ollama and pull the model:
+- очищает таблицы `llm_explanations`, `predictions`, `csv_uploads`, `customers`;
+- сбрасывает данные для демо-режима;
+- загружает первые 20 клиентов из CSV;
+- создает клиентов в базе без автоматического создания прогнозов и объяснений.
+
+## 6. Настройка Ollama
+
+Установить Ollama:
+
+```text
+https://ollama.com/download
+```
+
+Скачать модель:
 
 ```bash
 ollama pull llama3.2:3b
 ```
 
-Optional backend environment variables:
+Проверить, что Ollama работает:
 
-```env
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
+```bash
+curl http://localhost:11434/api/tags
 ```
 
-## Tests
+## Тесты
 
-Backend tests:
+Backend-тесты:
 
 ```bash
 cd backend
@@ -187,15 +402,36 @@ cd frontend
 npm run build
 ```
 
-## Security before publishing
+## Что важно для публикации репозитория
 
-- real secrets are not committed;
-- local `.env` files are ignored by Git;
-- ML artifacts and local caches are ignored;
-- `README` uses generic local examples instead of personal credentials or machine-specific paths.
+В репозиторий не включаются:
 
-## Notes
+- локальные `.env`-файлы;
+- виртуальное окружение;
+- `node_modules`;
+- build-артефакты frontend;
+- локально сгенерированные ML-артефакты;
+- кэши и временные файлы.
 
-- This repository is prepared for local development.
-- Backend and frontend are started separately.
-- ML artifacts are generated locally after training and should not be committed.
+Это сделано через `.gitignore`, чтобы в GitHub не утекли локальные настройки и лишние файлы.
+
+## Почему проект полезен как учебный кейс
+
+Этот проект хорош тем, что в нем соединены сразу несколько направлений:
+
+- backend-разработка;
+- frontend-разработка;
+- работа с PostgreSQL;
+- обучение и использование ML-модели;
+- интеграция локальной LLM;
+- тестирование backend API;
+- подготовка MVP, который можно дальше расширять.
+
+Проект можно развивать дальше:
+
+- добавить импорт клиентов из CSV;
+- добавить авторизацию;
+- вынести backend и frontend в Docker;
+- заменить базовую модель на более сильную;
+- расширить аналитику;
+- улучшить качество LLM-объяснений.
